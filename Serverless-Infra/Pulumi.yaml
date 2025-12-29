@@ -1,0 +1,7 @@
+name: weprint-infra
+description: AWS Infrastructure for We-Print
+runtime: python
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python

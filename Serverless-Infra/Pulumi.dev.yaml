@@ -1,0 +1,2 @@
+secretsprovider: awskms://alias/weprint-pulumi-key?region=eu-west-1
+encryptedkey: AQICAHiBBjEe1Mxj8/4I7iaNxuyLfyNXdIxOOIWyEX+8MKtQGAFtM6Ymhdg/XzODabLJYoayAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMoC+8ey0dwLjTMfETAgEQgDuZydduKJjAAIqI/pVOfw3ZgJNEAPElgLECFeQ0222ov8eAY3SC2FjlGvUs3AovtceST+nkQRXuUEA1Gw==
