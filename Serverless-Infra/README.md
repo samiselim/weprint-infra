@@ -1,92 +1,84 @@
- # AWS Python S3 Bucket Pulumi Template
+# We-Print Infrastructure (AWS + Pulumi)
 
- A minimal Pulumi template for provisioning a single AWS S3 bucket using Python.
+This repository contains the **Infrastructure as Code (IaC)** for the We-Print platform, built using Pulumi and Python. It manages a highly-available, secure, and monitored environment across multiple environments (`dev` and `prod`).
 
- ## Overview
+## 🏗️ Architecture Overview
 
- This template provisions an S3 bucket (`pulumi_aws.s3.BucketV2`) in your AWS account and exports its ID as an output. It’s an ideal starting point when:
-  - You want to learn Pulumi with AWS in Python.
-  - You need a barebones S3 bucket deployment to build upon.
-  - You prefer a minimal template without extra dependencies.
+The system follows a modern full-stack architecture optimized for AWS Free Tier eligibility:
 
- ## Prerequisites
+- **Frontend**: Angular SPA hosted on **S3** and delivered via **CloudFront** (CDN) with OAC security.
+- **Backend**: Laravel API running on **EC2 (t3.micro)** with PHP 8.2 & Nginx.
+- **Database**: **RDS MySQL (db.t3.micro)** in private subnets for high security.
+- **Storage**: Persistent **EBS Volume (20GB)** mounted at `/var/www` to ensure data and codebase survive instance termination.
+- **Networking**: Custom **VPC** with distinct public and private subnets, NAT-less for cost optimization.
 
- - An AWS account with permissions to create S3 buckets.
- - AWS credentials configured in your environment (for example via AWS CLI or environment variables).
- - Python 3.6 or later installed.
- - Pulumi CLI already installed and logged in.
+## ✨ Key Features
 
- ## Getting Started
+### 1. Multi-Environment Isolation
+- **Stacks**: Separate `dev` and `prod` stacks.
+- **Naming**: All resources are automatically prefixed with the stack name (e.g., `weprint-vpc-dev`).
+- **Isolation**: Workloads are completely independent between environments.
 
- 1. Generate a new project from this template:
-    ```bash
-    pulumi new aws-python
-    ```
- 2. Follow the prompts to set your project name and AWS region (default: `us-east-1`).
- 3. Change into your project directory:
-    ```bash
-    cd <project-name>
-    ```
- 4. Preview the planned changes:
-    ```bash
-    pulumi preview
-    ```
- 5. Deploy the stack:
-    ```bash
-    pulumi up
-    ```
- 6. Tear down when finished:
-    ```bash
-    pulumi destroy
-    ```
+### 2. Premium Monitoring & Alerting
+- **Host Metrics**: CloudWatch Agent installed on EC2 for Memory and Disk usage monitoring.
+- **Threshold Alarms**: Automatic alerts for CPU > 80%, RAM > 80%, and Disk > 80%.
+- **Uptime Monitoring**: Non-intrusive monitoring using CloudFront 5xx Error Rates (monitored via `us-east-1` for global insights).
+- **Designer Emails**: Custom **AWS Lambda formatters** turn technical JSON alerts into beautiful, human-readable status reports in your inbox.
 
- ## Project Layout
+### 3. Persistent Backend Setup
+- **Disk Management**: The entire application directory (`/var/www`) is hosted on a dedicated EBS volume.
+- **Reliability**: If the EC2 instance is replaced, the codebase, `.env` files, and order files remain safe on the volume.
 
- After running `pulumi new`, your directory will look like:
- ```
- ├── __main__.py         # Entry point of the Pulumi program
- ├── Pulumi.yaml         # Project metadata and template configuration
- ├── requirements.txt    # Python dependencies
- └── Pulumi.<stack>.yaml # Stack-specific configuration (e.g., Pulumi.dev.yaml)
- ```
+### 4. CI/CD Ready
+- **GitHub Actions**: Integrated with automated workflows for both Frontend and Backend deployments.
+- **Zero-Touch Config**: Secrets managed via AWS Secrets Manager and GitHub Secrets.
 
- ## Configuration
+## 🚀 Getting Started
 
- This template defines the following config value:
+### Prerequisites
+- [Pulumi CLI](https://www.pulumi.com/docs/get-started/install/)
+- [AWS CLI](https://aws.amazon.com/cli/)
+- Python 3.9+
 
- - `aws:region` (string)
-   The AWS region to deploy resources into.
-   Default: `us-east-1`
+### Initial Setup
+1. **Clone the repository**:
+   ```bash
+   git clone <repo-url>
+   cd weprint-infra/Serverless-Infra
+   ```
 
- View or update configuration with:
- ```bash
- pulumi config get aws:region
- pulumi config set aws:region us-west-2
- ```
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
- ## Outputs
+3. **Select a stack**:
+   ```bash
+   pulumi stack select dev
+   ```
 
- Once deployed, the stack exports:
+4. **Deploy**:
+   ```bash
+   pulumi up
+   ```
 
- - `bucket_name` — the ID of the created S3 bucket.
+## 🛠️ Configuration
 
- Retrieve outputs with:
- ```bash
- pulumi stack output bucket_name
- ```
+Configuration is managed via `Pulumi.<stack>.yaml`:
 
- ## Next Steps
+```yaml
+config:
+  weprint-infra:alert_email: your-email@example.com
+  weprint-infra:instance_type: t3.micro
+  weprint-infra:db_instance_class: db.t3.micro
+```
 
- - Customize `__main__.py` to add or configure additional resources.
- - Explore the Pulumi AWS SDK: https://www.pulumi.com/registry/packages/aws/
- - Break your infrastructure into modules for better organization.
- - Integrate into CI/CD pipelines for automated deployments.
+## 📊 Monitoring Dashboard
 
- ## Help and Community
+To view your infrastructure health:
+1. Log in to **AWS Console**.
+2. Navigate to **CloudWatch > Alarms**.
+3. All alarms starting with `weprint-` provide a real-time status of your system.
 
- If you have questions or need assistance:
- - Pulumi Documentation: https://www.pulumi.com/docs/
- - Community Slack: https://slack.pulumi.com/
- - GitHub Issues: https://github.com/pulumi/pulumi/issues
-
- Contributions and feedback are always welcome!
+---
+**Maintained by We-Print DevOps** 🚀
