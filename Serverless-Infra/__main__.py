@@ -4,16 +4,17 @@ import security
 import database
 import backend_ec2
 import frontend_s3_cf
+import monitoring
 
 # Load Configuration
 config = pulumi.Config()
 stack = pulumi.get_stack()
 
 # Environment-specific settings
-# Default to t3.micro for dev, maybe something bigger for prod if needed
 instance_type = config.get("instance_type") or "t3.micro"
 db_instance_class = config.get("db_instance_class") or "db.t3.micro"
 ebs_size = config.get_int("ebs_size") or 20
+alert_email = config.get("alert_email")
 
 # 1. Create Networking
 vpc_resource, public_subnet, private_subnet, private_subnet_2 = vpc.create_vpc(stack)
@@ -39,6 +40,9 @@ backend_server, backend_eip = backend_ec2.create_backend(
 
 # 5. Create Frontend (S3 + CloudFront)
 bucket, distribution = frontend_s3_cf.create_frontend(backend_eip.public_dns, stack)
+
+# 6. Create Monitoring & Alarms
+monitoring_topic = monitoring.create_monitoring(backend_server.id, distribution.id, stack, alert_email)
 
 # Exports
 pulumi.export("backend_public_ip", backend_eip.public_ip)

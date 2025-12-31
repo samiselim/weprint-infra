@@ -5,3 +5,4 @@ config:
   Serverless-Infra:instance_type: t3.micro
   Serverless-Infra:db_instance_class: db.t3.micro
   Serverless-Infra:ebs_size: 20
+  Serverless-Infra:alert_email: samiselim75@gmail.com
