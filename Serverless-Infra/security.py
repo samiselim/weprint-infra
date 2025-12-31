@@ -1,9 +1,9 @@
 import pulumi
 import pulumi_aws as aws
 
-def create_security_groups(vpc_id):
+def create_security_groups(vpc_id, stack):
     # Security Group for Backend (EC2)
-    backend_sg = aws.ec2.SecurityGroup("weprint-backend-sg",
+    backend_sg = aws.ec2.SecurityGroup(f"weprint-backend-sg-{stack}",
         description="Allow HTTP and SSH access",
         vpc_id=vpc_id,
         ingress=[
@@ -41,11 +41,11 @@ def create_security_groups(vpc_id):
             )
         ],
         tags={
-            "Name": "weprint-backend-sg",
+            "Name": f"weprint-backend-sg-{stack}",
         })
 
     # Security Group for Database (RDS)
-    db_sg = aws.ec2.SecurityGroup("weprint-db-sg",
+    db_sg = aws.ec2.SecurityGroup(f"weprint-db-sg-{stack}",
         description="Allow MySQL access from Backend",
         vpc_id=vpc_id,
         ingress=[
@@ -58,7 +58,7 @@ def create_security_groups(vpc_id):
             ),
         ],
         tags={
-            "Name": "weprint-db-sg",
+            "Name": f"weprint-db-sg-{stack}",
         })
 
     return backend_sg, db_sg

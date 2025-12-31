@@ -1,0 +1,6 @@
+secretsprovider: awskms://alias/weprint-pulumi-key?region=eu-west-1
+config:
+  aws:region: eu-west-1
+  Serverless-Infra:instance_type: t3.micro
+  Serverless-Infra:db_instance_class: db.t3.micro
+  Serverless-Infra:ebs_size: 20

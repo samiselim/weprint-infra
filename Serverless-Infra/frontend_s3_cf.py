@@ -1,22 +1,24 @@
 import pulumi
 import pulumi_aws as aws
 
-def create_frontend(backend_dns):
-    # Create S3 Bucket
-    bucket = aws.s3.Bucket("weprint-frontend-bucket",
+def create_frontend(backend_dns, stack="dev"):
+    # Create S3 Bucket (Must be globally unique)
+    bundle_name = f"weprint-frontend-{stack}"
+    bucket = aws.s3.Bucket(bundle_name,
         tags={
-            "Name": "weprint-frontend-bucket",
+            "Name": bundle_name,
+            "Environment": stack
         })
 
     # Create Origin Access Control (OAC)
-    oac = aws.cloudfront.OriginAccessControl("weprint-oac",
-        description="OAC for We-Print Frontend",
+    oac = aws.cloudfront.OriginAccessControl(f"weprint-oac-{stack}",
+        description=f"OAC for We-Print Frontend - {stack}",
         origin_access_control_origin_type="s3",
         signing_behavior="always",
         signing_protocol="sigv4")
 
     # CloudFront Distribution
-    distribution = aws.cloudfront.Distribution("weprint-distribution",
+    distribution = aws.cloudfront.Distribution(f"weprint-distribution-{stack}",
         enabled=True,
         origins=[
             # S3 Origin
@@ -164,11 +166,12 @@ def create_frontend(backend_dns):
             cloudfront_default_certificate=True,
         ),
         tags={
-            "Name": "weprint-distribution",
+            "Name": f"weprint-distribution-{stack}",
+            "Environment": stack
         })
 
     # Allow CloudFront to access S3 Bucket (Bucket Policy)
-    bucket_policy = aws.s3.BucketPolicy("weprint-bucket-policy",
+    bucket_policy = aws.s3.BucketPolicy(f"weprint-bucket-policy-{stack}",
         bucket=bucket.id,
         policy=pulumi.Output.all(bucket.arn, distribution.arn).apply(
             lambda args: f"""{{
