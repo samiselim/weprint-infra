@@ -1,4 +1,5 @@
 import pulumi
+import pulumi_aws as aws
 import vpc
 import security
 import database
@@ -42,7 +43,9 @@ backend_server, backend_eip = backend_ec2.create_backend(
 bucket, distribution = frontend_s3_cf.create_frontend(backend_eip.public_dns, stack)
 
 # 6. Create Monitoring & Alarms
-monitoring_topic = monitoring.create_monitoring(backend_server.id, distribution.id, stack, alert_email)
+# CloudFront metrics are only in us-east-1
+us_east_1 = aws.Provider("us-east-1", region="us-east-1")
+monitoring_topic = monitoring.create_monitoring(backend_server.id, distribution.id, stack, alert_email, us_east_1)
 
 # Exports
 pulumi.export("backend_public_ip", backend_eip.public_ip)
