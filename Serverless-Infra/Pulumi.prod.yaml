@@ -1,4 +1,5 @@
 secretsprovider: awskms://alias/weprint-pulumi-key?region=eu-west-1
+encryptedkey: AQICAHiBBjEe1Mxj8/4I7iaNxuyLfyNXdIxOOIWyEX+8MKtQGAE+PR1675IJCDfJIEvXn4fIAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMf8lBEVCztB3C3NhVAgEQgDso8XK1Y9GCcZ/dHlA3u26k3HRHdXShkuCNvcvhxhQj23xJb9KpRKT9gRszU8qMSJyp/ugjF2XpMBjpIw==
 config:
   aws:region: eu-west-1
   Serverless-Infra:instance_type: t3.micro

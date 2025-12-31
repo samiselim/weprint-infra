@@ -9,10 +9,36 @@ def create_backend(public_subnet_id, security_group_ids, db_endpoint, db_usernam
         filters=[{"name": "name", "values": ["al2023-ami-2023.*-x86_64"]}],
     )
 
+    # 1. IAM Role for CloudWatch Agent
+    role = aws.iam.Role(f"weprint-ec2-role-{stack}",
+        assume_role_policy="""{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                    },
+                    "Effect": "Allow",
+                    "Sid": ""
+                }
+            ]
+        }""")
+
+    # Attach CloudWatchAgentServerPolicy
+    aws.iam.RolePolicyAttachment(f"weprint-cw-policy-{stack}",
+        role=role.name,
+        policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")
+
+    # Instance Profile
+    instance_profile = aws.iam.InstanceProfile(f"weprint-ec2-profile-{stack}",
+        role=role.name)
+
     # Create EC2 Instance
     server = aws.ec2.Instance(f"weprint-backend-server-{stack}",
         instance_type=instance_type,
         vpc_security_group_ids=security_group_ids,
+        iam_instance_profile=instance_profile.name,
         ami=ami.id,
         subnet_id=public_subnet_id,
         key_name="weprint-key", # Attach specific key pair
