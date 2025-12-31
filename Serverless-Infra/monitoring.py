@@ -3,36 +3,22 @@ import pulumi_aws as aws
 import json
 
 def create_monitoring(instance_id, distribution_id, stack="dev", alert_email=None, cloudfront_provider=None):
-    # 1. Create SNS Topic for Alerts (Local Region - eu-west-1)
+    # --- 1. SNS Setup ---
+    # Topic for local (Ireland) beauty-formatted alerts
     topic = aws.sns.Topic(f"weprint-alerts-{stack}",
-        display_name=f"We-Print Infrastructure Alerts - {stack}")
+        display_name=f"We-Print Alerts - {stack}")
 
-    # 2. Add Email Subscription (Local Region)
     if alert_email:
         aws.sns.TopicSubscription(f"weprint-alerts-email-{stack}",
             topic=topic.arn,
             protocol="email",
             endpoint=alert_email)
 
-    # Allow EventBridge to publish to this SNS Topic
-    aws.sns.TopicPolicy(f"weprint-sns-policy-{stack}",
-        arn=topic.arn,
-        policy=topic.arn.apply(lambda arn: json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "events.amazonaws.com"},
-                "Action": "sns:Publish",
-                "Resource": arn
-            }]
-        })))
-
-    # 3. Create SNS Topic & Subscription in us-east-1 (For CloudFront Alarms)
-    # This is because Alarms in us-east-1 MUST trigger Topics in us-east-1
-    global_topic_arn = topic.arn
+    # Topic for global (US) beauty-formatted alerts
+    global_topic_arn = None
     if cloudfront_provider and alert_email:
         global_topic = aws.sns.Topic(f"weprint-global-alerts-{stack}",
-            display_name=f"We-Print Global Uptime Alerts - {stack}",
+            display_name=f"We-Print Global Alerts - {stack}",
             opts=pulumi.ResourceOptions(provider=cloudfront_provider))
         
         aws.sns.TopicSubscription(f"weprint-global-email-{stack}",
@@ -40,58 +26,130 @@ def create_monitoring(instance_id, distribution_id, stack="dev", alert_email=Non
             protocol="email",
             endpoint=alert_email,
             opts=pulumi.ResourceOptions(provider=cloudfront_provider))
-        
-        # Policy for Global Topic
-        aws.sns.TopicPolicy(f"weprint-global-sns-policy-{stack}",
-            arn=global_topic.arn,
-            policy=global_topic.arn.apply(lambda arn: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "events.amazonaws.com"},
-                    "Action": "sns:Publish",
-                    "Resource": arn
-                }]
-            })),
-            opts=pulumi.ResourceOptions(provider=cloudfront_provider))
-        
         global_topic_arn = global_topic.arn
 
-    # 4. EventBridge Rules for Readable Emails
-    def create_readable_rule(name, sns_topic_arn, region_provider=None):
-        rule = aws.cloudwatch.EventRule(f"weprint-rule-{name}-{stack}",
-            description=f"Rule to format {name} alerts for {stack}",
+    # --- 2. Lambda Role & Policy (Reusable) ---
+    def create_lambda_role(name, region_provider=None):
+        role = aws.iam.Role(f"weprint-lambda-role-{name}-{stack}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Effect": "Allow",
+                }]
+            }),
+            opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
+
+        aws.iam.RolePolicyAttachment(f"weprint-lambda-log-policy-{name}-{stack}",
+            role=role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
+        
+        aws.iam.RolePolicy(f"weprint-lambda-sns-policy-{name}-{stack}",
+            role=role.name,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sns:Publish",
+                    "Resource": "*",
+                    "Effect": "Allow",
+                }]
+            }),
+            opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
+        return role
+
+    # --- 3. Lambda Implementation ---
+    def create_formatter_lambda(name, target_topic_arn, region_provider=None):
+        role = create_lambda_role(name, region_provider)
+        
+        # Inline Lambda code for the formatter
+        lambda_code = """
+import boto3
+import json
+import os
+
+def handler(event, context):
+    sns = boto3.client('sns')
+    detail = event.get('detail', {})
+    alarm_name = detail.get('alarmName', 'Unknown Alarm')
+    new_state = detail.get('state', {}).get('value', 'Unknown State')
+    reason = detail.get('state', {}).get('reason', 'No details provided.')
+    time = event.get('time', 'Unknown Time')
+    
+    emoji = "🔴" if new_state == "ALARM" else "🟢"
+    status_label = "CRITICAL ALERT" if new_state == "ALARM" else "RECOVERY"
+    
+    message = (
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"
+        f" {emoji}  WE-PRINT INFRASTRUCTURE: {status_label}\\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n"
+        f"📍  ENVIRONMENT: {os.environ['STACK_NAME']}\\n"
+        f"🚨  ALARM:       {alarm_name}\\n"
+        f"📊  STATUS:      {new_state}\\n"
+        f"⏰  TIME:        {time}\\n\\n"
+        f"📝  DETAILS:\\n"
+        f"----------------------------------------------------\\n"
+        f"{reason}\\n"
+        f"----------------------------------------------------\\n\\n"
+        f"👉  ACTION: Please check your AWS Managed Console for more information.\\n\\n"
+        f"We-Print DevOps 🚀"
+    )
+    
+    subject = f"{emoji} [{status_label}] {alarm_name}"
+    
+    sns.publish(
+        TopicArn=os.environ['SNS_TOPIC_ARN'],
+        Message=message,
+        Subject=subject
+    )
+"""
+        
+        fn = aws.lambda_.Function(f"weprint-formatter-{name}-{stack}",
+            runtime="python3.11",
+            handler="index.handler",
+            role=role.arn,
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(lambda_code)
+            }),
+            environment={
+                "variables": {
+                    "SNS_TOPIC_ARN": target_topic_arn,
+                    "STACK_NAME": stack.upper()
+                }
+            },
+            opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
+        
+        # EventBridge Rule to trigger Lambda
+        rule = aws.cloudwatch.EventRule(f"weprint-format-rule-{name}-{stack}",
+            description="Format CloudWatch alarms into beautiful emails",
             event_pattern=json.dumps({
                 "source": ["aws.cloudwatch"],
                 "detail-type": ["CloudWatch Alarm State Change"],
                 "detail": {
-                    "state": {"value": ["ALARM"]},
                     "alarmName": [{"prefix": "weprint-"}]
                 }
             }),
             opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
-
-        aws.cloudwatch.EventTarget(f"weprint-target-{name}-{stack}",
+        
+        aws.lambda_.Permission(f"weprint-lambda-prm-{name}-{stack}",
+            action="lambda:InvokeFunction",
+            function=fn.name,
+            principal="events.amazonaws.com",
+            source_arn=rule.arn,
+            opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
+        
+        aws.cloudwatch.EventTarget(f"weprint-format-target-{name}-{stack}",
             rule=rule.name,
-            arn=sns_topic_arn,
-            input_transformer=aws.cloudwatch.EventTargetInputTransformerArgs(
-                input_paths={
-                    "alarmName": "$.detail.alarmName",
-                    "newState": "$.detail.state.value",
-                    "reason": "$.detail.state.reason",
-                    "time": "$.time"
-                },
-                input_template=json.dumps("[weprint-<newState>] Alert Triggered!\n\nAlarm: <alarmName>\nTime: <time>\n\nReason:\n<reason>\n\nAction: Please investigate the infrastructure in the AWS Console.")
-            ),
+            arn=fn.arn,
             opts=pulumi.ResourceOptions(provider=region_provider) if region_provider else None)
 
-    # Register rules for both regions
-    create_readable_rule("local", topic.arn) # Ireland
+    # Instantiate formatters
+    create_formatter_lambda("local", topic.arn)
     if cloudfront_provider:
-        create_readable_rule("global", global_topic_arn, cloudfront_provider) # US
+        create_formatter_lambda("global", global_topic_arn, cloudfront_provider)
 
-    # 5. EC2 System Alarms (CPU, Memory, Disk) - in eu-west-1
-    # Note: We NO LONGER put topic.arn in alarm_actions because EventBridge handles the email
+    # --- 4. EC2 System Alarms (CPU, Memory, Disk) ---
     aws.cloudwatch.MetricAlarm(f"weprint-cpu-high-{stack}",
         comparison_operator="GreaterThanOrEqualToThreshold",
         evaluation_periods=2,
@@ -133,9 +191,7 @@ def create_monitoring(instance_id, distribution_id, stack="dev", alert_email=Non
             "fstype": "xfs"
         })
 
-    # 6. CloudFront Uptime Monitoring (Non-Intrusive) - in us-east-1
-    # Monitor 5xx Error Rate to detect if the domain/backend is down
-    # NOTE: CloudFront metrics are ONLY available in us-east-1
+    # --- 5. CloudFront Uptime Monitoring ---
     aws.cloudwatch.MetricAlarm(f"weprint-uptime-5xx-{stack}",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=1,
