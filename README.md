@@ -4,7 +4,7 @@ This repository contains the **Infrastructure as Code (IaC)** for the We-Print p
 
 ## 🏗️ Architecture Overview
 
-![We-Print Infrastructure Diagram](weprint.drawio.png)
+![We-Print Infrastructure Diagram](weprint.drawio.svg)
 
 The system follows a modern full-stack architecture optimized for AWS Free Tier eligibility:
 
