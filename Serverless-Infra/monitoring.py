@@ -67,6 +67,7 @@ def create_monitoring(instance_id, distribution_id, stack="dev", alert_email=Non
         threshold=5, # Trigger if >5% of requests are errors
         alarm_description="Alarm if frontend or backend returns high error rate (downtime detection)",
         alarm_actions=[topic.arn],
+        treat_missing_data="notBreaching", # This ensures the alarm stays "OK" when traffic is zero
         dimensions={
             "DistributionId": distribution_id,
             "Region": "Global"
