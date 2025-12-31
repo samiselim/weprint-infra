@@ -83,7 +83,31 @@ def create_frontend(backend_dns):
             ),
             # Optional: Add storage behavior if you serve files
             aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
-                path_pattern="/storage/*",
+                path_pattern="/user/*",
+                target_origin_id="backend-ec2",
+                viewer_protocol_policy="redirect-to-https",
+                allowed_methods=["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+                cached_methods=["GET", "HEAD"],
+                forwarded_values=aws.cloudfront.DistributionOrderedCacheBehaviorForwardedValuesArgs(
+                    query_string=True,
+                    headers=[
+                        "Authorization", 
+                        "Origin", 
+                        "Accept", 
+                        "X-Requested-With",
+                        "X-CSRF-Token"
+                    ],
+                    cookies=aws.cloudfront.DistributionOrderedCacheBehaviorForwardedValuesCookiesArgs(
+                        forward="all",
+                    ),
+                ),
+                min_ttl=0,
+                default_ttl=0,
+                max_ttl=0,
+                compress=True,
+            ),
+            aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
+                path_pattern="/orders_files/*",
                 target_origin_id="backend-ec2",
                 viewer_protocol_policy="redirect-to-https",
                 allowed_methods=["GET", "HEAD", "OPTIONS"],
@@ -95,10 +119,28 @@ def create_frontend(backend_dns):
                     ),
                 ),
                 min_ttl=0,
-                default_ttl=86400, # Cache for 24 hours
-                max_ttl=31536000, # Max 1 year
+                default_ttl=86400, # Cache files for 24 hours to save EC2 bandwidth
+                max_ttl=31536000,
                 compress=True,
             ),
+            aws.cloudfront.DistributionOrderedCacheBehaviorArgs(
+                path_pattern="/images/*",
+                target_origin_id="backend-ec2",
+                viewer_protocol_policy="redirect-to-https",
+                allowed_methods=["GET", "HEAD", "OPTIONS"],
+                cached_methods=["GET", "HEAD"],
+                forwarded_values=aws.cloudfront.DistributionOrderedCacheBehaviorForwardedValuesArgs(
+                    query_string=False,
+                    cookies=aws.cloudfront.DistributionOrderedCacheBehaviorForwardedValuesCookiesArgs(
+                        forward="none",
+                    ),
+                ),
+                min_ttl=0,
+                default_ttl=86400, # Cache for 1 day
+                max_ttl=31536000,
+                compress=True,
+            ),
+
         ],
         # SPA Routing: Redirect 403/404 to index.html
         custom_error_responses=[

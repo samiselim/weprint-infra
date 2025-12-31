@@ -24,24 +24,6 @@ def create_backend(public_subnet_id, security_group_ids, db_endpoint, db_usernam
         tags={
             "Name": "weprint-backend-server",
         })
-
-    # Create Dedicated EBS Volume for Persistent Storage
-    # We create it in the same AZ as the subnet/instance
-    storage_volume = aws.ebs.Volume("weprint-storage-vol",
-        availability_zone=server.availability_zone,
-        size=10, # 10 GB for storage
-        type="gp3",
-        tags={
-            "Name": "weprint-storage-vol",
-        })
-
-    # Attach the volume to the instance
-    # Device name /dev/xvdf is common for additional volumes
-    attachment = aws.ec2.VolumeAttachment("weprint-storage-attach",
-        device_name="/dev/xvdf",
-        instance_id=server.id,
-        volume_id=storage_volume.id)
-
     # Create Elastic IP
     eip = aws.ec2.Eip("weprint-backend-eip",
         instance=server.id,
