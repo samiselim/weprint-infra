@@ -1,0 +1,74 @@
+name: Manage Infrastructure
+run-name: Manage Infrastructure [${{ inputs.env }}] [${{ inputs.command }}]
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'Stack/Environment to target'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      command:
+        description: 'Pulumi Command'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - up
+          - destroy
+
+jobs:
+  infra:
+    environment: ${{ inputs.env }}
+    runs-on: ubuntu-latest
+    # This sets the default folder for 'run' commands ONLY
+    defaults:
+      run:
+        working-directory: Serverless-Infra
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        # Assuming requirements.txt is INSIDE 'infra' folder
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+      - name: Login to Pulumi
+        run: | 
+          pulumi login s3://weprint-pulumi-state-bucket
+          pulumi stack select ${{ inputs.env }} || true
+          pulumi stack change-secrets-provider "awskms://alias/weprint-pulumi-key?region=eu-west-1"
+
+      - name: Run Pulumi
+        uses: pulumi/actions@v6
+        with:
+          command: ${{ inputs.command }}
+          stack-name: ${{ inputs.env }}
+          cloud-url: s3://weprint-pulumi-state-bucket
+          work-dir: Serverless-Infra
+          create-stack: true
+          color: always
+          diff: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: eu-west-1
