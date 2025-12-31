@@ -51,7 +51,7 @@ def create_monitoring(instance_id, distribution_id, stack="dev", alert_email=Non
         dimensions={
             "InstanceId": instance_id,
             "path": "/",
-            "device": "xvda1",
+            "device": "nvme0n1p1",
             "fstype": "xfs"
         })
 
